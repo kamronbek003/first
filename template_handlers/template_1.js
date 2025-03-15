@@ -441,7 +441,9 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // "Tayyor!" xabarini fayldan keyin yuborish
   await ctx.reply(
-    "✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!",
+    `✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!
+
+📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊`,
     Markup.keyboard([["🔙 Orqaga"]]).resize()
   );
 
