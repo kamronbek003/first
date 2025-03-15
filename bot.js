@@ -371,7 +371,7 @@ async function startBot() {
           Markup.inlineKeyboard([
             Markup.button.url(
               "Shablonlar",
-              "https://beamish-mandazi-97513f.netlify.app"
+              "https://prezentor-bot-shablon.netlify.app"
             ),
           ])
         );
