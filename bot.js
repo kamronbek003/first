@@ -332,7 +332,7 @@ async function startBot() {
             [
               Markup.button.url(
                 "Shablonlar bilan tanishish",
-                "https://beamish-mandazi-97513f.netlify.app"
+                "https://prezentor-bot-shablon.netlify.app"
               ),
             ],
           ])
