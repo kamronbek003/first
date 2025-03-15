@@ -294,23 +294,19 @@ async function startBot() {
             ["🔙 Orqaga"],
           ]).resize()
         );
-      } 
-      else if (ctx.message.text === "📊 Taqdimot") {
+      } else if (ctx.message.text === "📊 Taqdimot") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         await ctx.reply("Ism-familiyangizni kiriting:");
         ctx.session.step = "presentation_author_name";
-      } 
-      else if (ctx.session.step === "presentation_author_name") {
+      } else if (ctx.session.step === "presentation_author_name") {
         ctx.session.presentationData = { authorName: ctx.message.text.trim() };
         await ctx.reply("O‘qiydigan muassasangizni kiriting:");
         ctx.session.step = "presentation_institution";
-      } 
-      else if (ctx.session.step === "presentation_institution") {
+      } else if (ctx.session.step === "presentation_institution") {
         ctx.session.presentationData.institution = ctx.message.text.trim();
         await ctx.reply("Taqdimot mavzusini kiriting:");
         ctx.session.step = "presentation_topic";
-      } 
-      else if (ctx.session.step === "presentation_topic") {
+      } else if (ctx.session.step === "presentation_topic") {
         ctx.session.presentationData.topic = ctx.message.text.trim();
         await ctx.reply(
           "Qaysi shablon asosida taqdimot yaratmoqchisiz? (1-12 oralig‘ida tanlang)",
@@ -338,34 +334,28 @@ async function startBot() {
           ])
         );
         ctx.session.step = "presentation_template";
-      } 
-      else if (ctx.message.text === "📝 Referat") {
+      } else if (ctx.message.text === "📝 Referat") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         await ctx.reply("Hozircha bu xizmat mavjud emas.", 
           Markup.keyboard([["🔙 Orqaga"]]).resize()
         );
-      } 
-      else if (ctx.message.text === "📚 Mustaqil ish") {
+      } else if (ctx.message.text === "📚 Mustaqil ish") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         await ctx.reply("Hozircha bu xizmat mavjud emas.", 
           Markup.keyboard([["🔙 Orqaga"]]).resize()
         );
-      } 
-      else if (ctx.session.step === "work_author_name") {
+      } else if (ctx.session.step === "work_author_name") {
         ctx.session.workData = { authorName: ctx.message.text.trim() };
         await ctx.reply("O‘qiydigan muassasangizni kiriting:");
         ctx.session.step = "work_institution";
-      } 
-      else if (ctx.session.step === "work_institution") {
+      } else if (ctx.session.step === "work_institution") {
         ctx.session.workData.institution = ctx.message.text.trim();
         await ctx.reply("Referat mavzusini kiriting:");
         ctx.session.step = "work_topic";
-      } 
-      else if (ctx.session.step === "work_topic") {
+      } else if (ctx.session.step === "work_topic") {
         ctx.session.workData.topic = ctx.message.text.trim();
         await requestConfirmation(ctx, ctx.session.workType);
-      } 
-      else if (ctx.message.text === "📄 Shablonlar") {
+      } else if (ctx.message.text === "📄 Shablonlar") {
         ctx.reply(
           "Shablonlarni ko‘rish uchun quyidagi havolaga o‘ting:",
           Markup.inlineKeyboard([
@@ -375,19 +365,17 @@ async function startBot() {
             ),
           ])
         );
-      } 
-      else if (ctx.message.text === "📖 Qo‘llanma") {
+      } else if (ctx.message.text === "📖 Qo‘llanma") {
         ctx.reply(
           "Qo‘llanmani ko‘rish uchun quyidagi havolaga o‘ting:",
           Markup.inlineKeyboard([
             Markup.button.url(
               "Qo‘llanma",
-              "https://sparkling-moonbeam-e4dffb.netlify.app"
+              "https://prezenter-bot-qollanma.netlify.app"
             ),
           ])
         );
-      } 
-      else if (ctx.message.text === "💰 Balans") {
+      } else if (ctx.message.text === "💰 Balans") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         ctx.reply(
           `💰 **Balansingiz:** ${user.balance} so‘m\n` +
@@ -395,16 +383,14 @@ async function startBot() {
           `📌 **Balansni to‘ldirish** uchun pastdagi tugmani bosing! 🚀`,
           Markup.keyboard([["Balansni to‘ldirish"], ["🔙 Orqaga"]]).resize()
         );
-      } 
-      else if (ctx.message.text === "📎 Referal link") {
+      } else if (ctx.message.text === "📎 Referal link") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         const referralLink = `https://t.me/${bot.botInfo.username}?start=${user.telegramId}`;
         ctx.reply(
           `📎 Sizning referal linkingiz: \n${referralLink}\n\nDo‘stlaringizni taklif qiling va har bir yangi foydalanuvchi uchun 1000 so‘m bonus oling!`,
           Markup.keyboard([["🔙 Orqaga"]]).resize()
         );
-      } 
-      else if (ctx.message.text === "🔧 Admin panel" && ctx.from.id == adminId) {
+      } else if (ctx.message.text === "🔧 Admin panel" && ctx.from.id == adminId) {
         ctx.reply(
           "🔧 Admin panel:",
           Markup.keyboard([
@@ -413,8 +399,7 @@ async function startBot() {
             ["🔙 Orqaga"],
           ]).resize()
         );
-      } 
-      else if (ctx.message.text === "👥 Foydalanuvchilar ro‘yxati" && ctx.from.id == adminId) {
+      } else if (ctx.message.text === "👥 Foydalanuvchilar ro‘yxati" && ctx.from.id == adminId) {
         const users = await User.find();
         if (users.length === 0) {
           return ctx.reply("Foydalanuvchilar mavjud emas.");
@@ -429,12 +414,10 @@ async function startBot() {
           ctx,
           `👥 Foydalanuvchilar ro‘yxati:\n${userList}`
         );
-      } 
-      else if (ctx.message.text === "💰 Balans qo‘shish" && ctx.from.id == adminId) {
+      } else if (ctx.message.text === "💰 Balans qo‘shish" && ctx.from.id == adminId) {
         ctx.reply("Foydalanuvchi ID’sini kiriting:");
         ctx.session.step = "admin_add_balance_id";
-      } 
-      else if (ctx.session.step === "admin_add_balance_id") {
+      } else if (ctx.session.step === "admin_add_balance_id") {
         const userId = ctx.message.text.trim();
         const targetUser = await User.findOne({ telegramId: userId });
         if (!targetUser) {
@@ -443,8 +426,7 @@ async function startBot() {
         ctx.session.adminTargetUserId = userId;
         ctx.reply("Qo‘shmoqchi bo‘lgan balans miqdorini kiriting (so‘mda):");
         ctx.session.step = "admin_add_balance_amount";
-      } 
-      else if (ctx.session.step === "admin_add_balance_amount") {
+      } else if (ctx.session.step === "admin_add_balance_amount") {
         const amount = parseInt(ctx.message.text.trim());
         if (isNaN(amount) || amount <= 0) {
           return ctx.reply("Iltimos, to‘g‘ri miqdorni kiriting.");
@@ -454,6 +436,20 @@ async function startBot() {
         targetUser.balance += amount;
         targetUser.balanceHistory.push({ amount, date: new Date() });
         await targetUser.save();
+
+        // Foydalanuvchiga xabar yuborish
+        try {
+          await bot.telegram.sendMessage(
+            userId,
+            `🎉 Hurmatli foydalanuvchi! Admin tomonidan balansingizga ${amount} so‘m qo‘shildi.\n` +
+            `💰 Hozirgi balansingiz: ${targetUser.balance} so‘m`
+          );
+          logger.info(`Foydalanuvchiga (${userId}) balans qo‘shilgani haqida xabar yuborildi`);
+        } catch (err) {
+          logger.error(`Foydalanuvchiga (${userId}) xabar yuborishda xato:`, err);
+        }
+
+        // Adminga javob
         ctx.reply(
           `${userId} foydalanuvchisiga ${amount} so‘m qo‘shildi.`,
           Markup.keyboard([
@@ -462,8 +458,7 @@ async function startBot() {
           ]).resize()
         );
         ctx.session = {};
-      } 
-      else if (ctx.message.text === "📜 Balans tarixi" && ctx.from.id == adminId) {
+      } else if (ctx.message.text === "📜 Balans tarixi" && ctx.from.id == adminId) {
         const users = await User.find();
         const history = users
           .filter((u) => u.balanceHistory.some((h) => h.amount > 0))
@@ -484,8 +479,7 @@ async function startBot() {
           ctx,
           `📜 Balans tarixi (to‘ldirilganlar):\n${history}`
         );
-      } 
-      else if (ctx.message.text === "📊 Statistika" && ctx.from.id == adminId) {
+      } else if (ctx.message.text === "📊 Statistika" && ctx.from.id == adminId) {
         const totalUsers = await User.countDocuments();
         const totalBalance =
           (
@@ -500,17 +494,14 @@ async function startBot() {
             `Umumiy balans: ${totalBalance} so‘m\n` +
             `Talabalar soni: ${studentCount}`
         );
-      } 
-      else if (ctx.message.text === "🔙 Orqaga") {
+      } else if (ctx.message.text === "🔙 Orqaga") {
         showMainMenu(ctx);
-      } 
-      else if (ctx.message.text === "Balansni to‘ldirish") {
+      } else if (ctx.message.text === "Balansni to‘ldirish") {
         ctx.reply(
-          `📌 Balansni to‘ldirish\n\n💰 Xizmat narxlari har xil bo‘lib, har bir shablon uchun alohida belgilanadi.\n\n💳 To‘lov uchun karta:\n1234567890123456\n\n👤 Qabul qiluvchi: Ism Familiya\n\n📤 To‘lovni amalga oshirgandan so‘ng, chekni skrinshot qilib yuboring.`,
+          `📌 Balansni to‘ldirish\n\n💰 Xizmat narxlari har xil bo‘lib, har bir shablon uchun alohida belgilanadi.\n\n💳 To‘lov uchun karta:\n5614682108792062\n\n👤 Qabul qiluvchi: Ibrohimov Kamronbek\n\n📤 To‘lovni amalga oshirgandan so‘ng, chekni skrinshot qilib yuboring.`,
           Markup.keyboard([["Chekni yuborish"], ["🔙 Orqaga"]]).resize()
         );
-      } 
-      else if (ctx.message.text === "Chekni yuborish") {
+      } else if (ctx.message.text === "Chekni yuborish") {
         ctx.session.step = "check";
         ctx.reply("Iltimos, to‘lov chekining skrinshotini yuboring:");
       }
