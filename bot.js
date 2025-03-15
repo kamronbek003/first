@@ -131,10 +131,7 @@ async function handleReferral(referredBy, newUserId) {
 // MongoDB connection and bot initialization
 async function startBot() {
   try {
-    await mongoose.connect(env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(env.MONGO_URI); // Removed deprecated options
     logger.info("MongoDB connected");
 
     // Session middleware
@@ -446,7 +443,10 @@ async function startBot() {
           );
           logger.info(`Foydalanuvchiga (${userId}) balans qo‘shilgani haqida xabar yuborildi`);
         } catch (err) {
-          logger.error(`Foydalanuvchiga (${userId}) xabar yuborishda xato:`, err);
+          logger.error(`Foydalanuvchiga (${userId}) xabar yuborishda xato: ${err.message}`);
+          await ctx.reply(
+            `${userId} foydalanuvchisiga ${amount} so‘m qo‘shildi, lekin unga xabar yuborib bo‘lmadi: ${err.message}`
+          );
         }
 
         // Adminga javob
