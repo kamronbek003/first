@@ -119,7 +119,7 @@ function showMainMenu(ctx) {
       Markup.keyboard([
         ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
         ["📜 Balans tarixi", "📊 Statistika"],
-        ["📢 Hammaga xabar yuborish"], // Admin uchun yangi opsiya
+        ["📢 Hammaga xabar yuborish"],
       ]).resize()
     );
   } else {
@@ -353,6 +353,88 @@ async function startBot() {
       } else if (ctx.message.text === "Chekni yuborish") {
         ctx.session.step = "check";
         ctx.reply("Iltimos, to‘lov chekining skrinshotini yuboring:");
+      } 
+      // Admin menu handlers
+      else if (ctx.message.text === "👥 Foydalanuvchilar ro‘yxati" && ctx.from.id == adminId) {
+        const users = await User.find();
+        if (users.length === 0) {
+          return ctx.reply("Foydalanuvchilar mavjud emas.");
+        }
+        let response = "👥 Foydalanuvchilar ro‘yxati:\n\n";
+        users.forEach((user, index) => {
+          response += `${index + 1}. ${user.firstName} ${user.lastName} (ID: ${user.telegramId}, Balans: ${user.balance} so‘m)\n`;
+        });
+        await sendLongMessage(ctx, response);
+      } else if (ctx.message.text === "💰 Balans qo‘shish" && ctx.from.id == adminId) {
+        await ctx.reply("Foydalanuvchi ID sini kiriting (masalan, 123456789):");
+        ctx.session.step = "admin_add_balance_id";
+      } else if (ctx.session.step === "admin_add_balance_id" && ctx.from.id == adminId) {
+        const userId = ctx.message.text.trim();
+        const user = await User.findOne({ telegramId: userId });
+        if (!user) {
+          return ctx.reply("Bunday foydalanuvchi topilmadi.", Markup.keyboard([
+            ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+            ["📜 Balans tarixi", "📊 Statistika"],
+            ["📢 Hammaga xabar yuborish"],
+          ]).resize());
+        }
+        ctx.session.adminAddBalanceUserId = userId;
+        await ctx.reply("Qo‘shmoqchi bo‘lgan balans miqdorini so‘mda kiriting (masalan, 5000):");
+        ctx.session.step = "admin_add_balance_amount";
+      } else if (ctx.session.step === "admin_add_balance_amount" && ctx.from.id == adminId) {
+        const amount = parseInt(ctx.message.text.trim());
+        if (isNaN(amount) || amount <= 0) {
+          return ctx.reply("Iltimos, to‘g‘ri miqdorni kiriting.");
+        }
+        const user = await User.findOne({ telegramId: ctx.session.adminAddBalanceUserId });
+        user.balance += amount;
+        user.balanceHistory.push({ amount, date: new Date() });
+        await user.save();
+        await bot.telegram.sendMessage(
+          user.telegramId,
+          `💰 Sizning balansingizga ${amount} so‘m qo‘shildi! Hozirgi balans: ${user.balance} so‘m`
+        );
+        await ctx.reply(`✅ ${user.firstName} ${user.lastName} ga ${amount} so‘m qo‘shildi.`, Markup.keyboard([
+          ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+          ["📜 Balans tarixi", "📊 Statistika"],
+          ["📢 Hammaga xabar yuborish"],
+        ]).resize());
+        ctx.session.step = null;
+      } else if (ctx.message.text === "📜 Balans tarixi" && ctx.from.id == adminId) {
+        await ctx.reply("Foydalanuvchi ID sini kiriting (tarixini ko‘rish uchun):");
+        ctx.session.step = "admin_balance_history";
+      } else if (ctx.session.step === "admin_balance_history" && ctx.from.id == adminId) {
+        const userId = ctx.message.text.trim();
+        const user = await User.findOne({ telegramId: userId });
+        if (!user) {
+          return ctx.reply("Bunday foydalanuvchi topilmadi.", Markup.keyboard([
+            ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+            ["📜 Balans tarixi", "📊 Statistika"],
+            ["📢 Hammaga xabar yuborish"],
+          ]).resize());
+        }
+        if (user.balanceHistory.length === 0) {
+          return ctx.reply(`${user.firstName} ${user.lastName} uchun balans tarixi mavjud emas.`);
+        }
+        let response = `📜 ${user.firstName} ${user.lastName} uchun balans tarixi:\n\n`;
+        user.balanceHistory.forEach((entry, index) => {
+          response += `${index + 1}. ${entry.amount} so‘m - ${new Date(entry.date).toLocaleString()}\n`;
+        });
+        await sendLongMessage(ctx, response);
+        ctx.session.step = null;
+      } else if (ctx.message.text === "📊 Statistika" && ctx.from.id == adminId) {
+        const totalUsers = await User.countDocuments();
+        const totalBalance = (await User.aggregate([{ $group: { _id: null, total: { $sum: "$balance" } } }])[0]?.total) || 0;
+        const activeUsers = await User.countDocuments({ registered: true });
+        const response = `📊 Statistika:\n\n` +
+          `👥 Umumiy foydalanuvchilar: ${totalUsers}\n` +
+          `✅ Faol foydalanuvchilar: ${activeUsers}\n` +
+          `💰 Umumiy balans: ${totalBalance} so‘m`;
+        await ctx.reply(response, Markup.keyboard([
+          ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+          ["📜 Balans tarixi", "📊 Statistika"],
+          ["📢 Hammaga xabar yuborish"],
+        ]).resize());
       } else if (ctx.message.text === "📢 Hammaga xabar yuborish" && ctx.from.id == adminId) {
         ctx.reply("Hammaga yuboriladigan xabarni kiriting (foydalanuvchi ismi uchun {ism} dan foydalaning):");
         ctx.session.step = "admin_broadcast";
@@ -450,7 +532,7 @@ async function startBot() {
           `📝 Mavzu: ${topic}\n` +
           `📄 Tur: Taqdimot shablon ${templateId}\n` +
           `💰 Narx: ${price} so‘m\n\n` +
-          `${ctx.session.firstUse ? "🎉 Birinchi foydalanish uchun balansingizda mablag' yeratli!" : "Tasdiqlash bilan balansingizdan pul yechiladi."}`,
+          `${ctx.session.firstUse ? "🎉 Birinchi foydalanish uchun balansingizda mablag' yetarli!" : "Tasdiqlash bilan balansingizdan pul yechiladi."}`,
         Markup.inlineKeyboard([
           Markup.button.callback("❌ Yo‘q", "confirm_template_no"),
           Markup.button.callback("✅ Ha", `confirm_template_${templateId}_yes`),
@@ -487,7 +569,7 @@ async function startBot() {
                 "📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. " +
                 "Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊"
             );
-            showMainMenu(ctx); // Taqdimot tayyor bo‘lgach asosiy menyu ochiladi
+            showMainMenu(ctx);
           },
         });
         if (ctx.session.firstUse) {
@@ -499,7 +581,7 @@ async function startBot() {
     bot.action("confirm_template_no", async (ctx) => {
       await ctx.reply(
         "❌ Tasdiqlash bekor qilindi. Qaytadan tanlang yoki /start bilan boshlang!",
-        Markup.keyboard([["✨ Yaratishni boshlash"], showMainMenu]).resize()
+        Markup.keyboard([["✨ Yaratishni boshlash"], ["🔙 Orqaga"]]).resize()
       );
       ctx.session = {};
     });
