@@ -3,7 +3,7 @@ const path = require("path");
 const { Markup } = require("telegraf");
 
 // Template 3-specific price
-const PRICE = 11000;
+const PRICE = 10000;
 
 // Template 3-specific background images
 const backgroundImages = [
