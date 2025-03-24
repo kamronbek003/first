@@ -7,12 +7,14 @@ const validator = require("validator");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const User = require("./models/User");
 const fs = require("fs");
+const { exec } = require("child_process");
+const path = require("path");
 
 // Template handlers
 const templateHandlers = {};
 templateHandlers["referat"] = require("./template_handlers/template_referat");
 templateHandlers["mustaqil"] = require("./template_handlers/template_mustaqil");
-for (let i = 1; i <= 8; i++) {
+for (let i = 1; i <= 9; i++) {
   templateHandlers[i] = require(`./template_handlers/template_${i}`);
 }
 
@@ -24,6 +26,8 @@ const env = cleanEnv(process.env, {
   CHANNELS: str(),
   GEMINI_API_KEY: str(),
   OPENROUTER_API_KEY: str(),
+  PRESENTATION_CHANNEL: str(),
+  ADMIN_PRESENTATION_CHANNEL: str(),
 });
 
 // Initialize bot and dependencies
@@ -44,6 +48,22 @@ const logger = winston.createLogger({
     new winston.transports.Console(),
   ],
 });
+
+// Shablonlar uchun rasmlar (har bir shablon uchun faqat bitta rasm)
+const templateSlides = {};
+for (let i = 1; i <= 8; i++) {
+  templateSlides[i] = `shablonlar_1/${i}/1.png`; // Har bir shablon uchun faqat bitta rasm
+}
+
+// Date formatting helper
+function formatDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} | ${hours}:${minutes}`;
+}
 
 // Loading animation
 async function showLoading(ctx) {
@@ -102,11 +122,92 @@ async function handleReferral(referredBy, newUserId) {
       logger.info(`Referral bonusi qo‘shildi: ${referrer.telegramId}`);
       await bot.telegram.sendMessage(
         referrer.telegramId,
-        "🎉 Sizning referal linkingiz orqali yangi foydalanuvchi ro‘yxatdan o‘tdi! Sizga 1000 so‘m bonus qo‘shildi."
+        `🎉 Sizning referal linkingiz orqali yangi foydalanuvchi ro‘yxatdan o‘tdi! Sizga 1000 so‘m bonus qo‘shildi.\nSana: ${formatDate(new Date())}`
       );
     } else {
       logger.warn(`Referrer topilmadi: ${referredBy}`);
     }
+  }
+}
+
+// Convert PPTX to PDF
+async function convertToPDF(pptxPath) {
+  return new Promise((resolve, reject) => {
+    const pdfPath = path.resolve(pptxPath.replace(".pptx", ".pdf"));
+    const command = `"C:\\Program Files\\LibreOffice\\program\\soffice.exe" --headless --convert-to pdf "${pptxPath}" --outdir "${path.dirname(pdfPath)}"`;
+
+    logger.info(`Starting PPTX to PDF conversion: ${pptxPath} -> ${pdfPath}`);
+    exec(command, { timeout: 10000 }, (error, stdout, stderr) => {
+      if (error) {
+        logger.error(`PDF conversion failed: ${error.message}`);
+        return reject(new Error(`PDFga aylantirishda xato: ${error.message}`));
+      }
+      if (!fs.existsSync(pdfPath)) {
+        logger.error(`PDF fayl yaratilmadi: ${pdfPath}`);
+        return reject(new Error("PDF fayl yaratilmadi"));
+      }
+      logger.info(`PDF file verified: ${pdfPath}`);
+      resolve(pdfPath);
+    });
+  });
+}
+
+// Post presentation to public channel (PDF)
+async function postPresentationToChannel(ctx, presentationData, filePath, templateId) {
+  let pdfPath;
+  try {
+    if (!fs.existsSync(filePath)) {
+      logger.error(`PPTX fayl topilmadi: ${filePath}`);
+      throw new Error("PPTX fayl topilmadi");
+    }
+    pdfPath = await convertToPDF(filePath);
+    const message = await bot.telegram.sendDocument(
+      env.PRESENTATION_CHANNEL,
+      { source: pdfPath },
+      {
+        caption: `👤 Taqdimotchi: ${presentationData.authorName}\n` +
+                 `📝 Mavzu: ${presentationData.topic}\n` +
+                 `📅 Yaratilgan sana: ${formatDate(new Date())}\n` +
+                 `📄 Shablon: №${templateId}`
+      }
+    );
+    logger.info(`Presentation posted to public channel: ${message.message_id}`);
+    return message.message_id;
+  } catch (error) {
+    logger.error(`Failed to post to public channel: ${error.message}`);
+    throw error;
+  } finally {
+    if (pdfPath && fs.existsSync(pdfPath)) {
+      fs.unlinkSync(pdfPath);
+      logger.info(`PDF fayl o‘chirildi: ${pdfPath}`);
+    }
+  }
+}
+
+// Post presentation to admin channel (PPTX)
+async function postPresentationToAdminChannel(ctx, presentationData, filePath, templateId) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      logger.error(`PPTX fayl topilmadi: ${filePath}`);
+      throw new Error("PPTX fayl topilmadi");
+    }
+    const user = await User.findOne({ telegramId: ctx.from?.id.toString() });
+    const message = await bot.telegram.sendDocument(
+      env.ADMIN_PRESENTATION_CHANNEL,
+      { source: filePath },
+      {
+        caption: `👤 Foydalanuvchi ID: ${ctx.from.id}\n` +
+                 `👤 Ism: ${user.firstName} ${user.lastName}\n` +
+                 `📝 Mavzu: ${presentationData.topic}\n` +
+                 `📅 Yaratilgan sana: ${formatDate(new Date())}\n` +
+                 `📄 Shablon: №${templateId}`
+      }
+    );
+    logger.info(`Presentation posted to admin channel: ${message.message_id}`);
+    return message.message_id;
+  } catch (error) {
+    logger.error(`Failed to post to admin channel: ${error.message}`);
+    throw error;
   }
 }
 
@@ -119,7 +220,7 @@ function showMainMenu(ctx) {
       Markup.keyboard([
         ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
         ["📜 Balans tarixi", "📊 Statistika"],
-        ["📢 Hammaga xabar yuborish"],
+        ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
       ]).resize()
     );
   } else {
@@ -129,8 +230,72 @@ function showMainMenu(ctx) {
         ["✨ Yaratishni boshlash"],
         ["📖 Qo‘llanma", "📄 Shablonlar"],
         ["💰 Balans", "📎 Referal link"],
+        ["👤 Men haqimda", "📊 Statistika"],
       ]).resize()
     );
+  }
+}
+
+// Shablon rasmini ko‘rsatish funksiyasi
+async function showTemplateSlideshow(ctx, templateId, fromSelection = false) {
+  const slidePath = path.resolve(templateSlides[templateId]);
+  logger.info(`Qidirilayotgan fayl yo‘li: ${slidePath}`);
+
+  if (!fs.existsSync(slidePath)) {
+    logger.error(`Fayl topilmadi: ${slidePath}`);
+    return ctx.reply(`Shablon №${templateId} uchun rasm topilmadi. Admin bilan bog‘laning.`);
+  }
+
+  const caption = `Shablon №${templateId}`;
+  const buttons = [];
+  if (templateId > 1) {
+    buttons.push(Markup.button.callback("⬅️", `slide_${templateId - 1}_${fromSelection}`));
+  }
+  buttons.push(Markup.button.callback("✅", `template_${templateId}`));
+  if (templateId < 8) {
+    buttons.push(Markup.button.callback("➡️", `slide_${templateId + 1}_${fromSelection}`));
+  }
+
+  const keyboard = Markup.inlineKeyboard([
+    buttons,
+    [Markup.button.url("Shablonlar", "https://prezentor-bot-shablon.netlify.app")],
+  ]);
+
+  if (ctx.session.lastSlideMessageId) {
+    try {
+      await ctx.telegram.editMessageMedia(
+        ctx.chat.id,
+        ctx.session.lastSlideMessageId,
+        null,
+        {
+          type: "photo",
+          media: { source: slidePath },
+          caption: caption,
+        },
+        keyboard
+      );
+      logger.info(`Xabar muvaffaqiyatli tahrir qilindi: ${ctx.session.lastSlideMessageId}`);
+    } catch (err) {
+      logger.warn(`Xabarni tahrir qilishda xato: ${err.message}`);
+      // Xatolik sababini aniqlash uchun qo‘shimcha log
+      if (err.code === 400 && err.description.includes("message to edit not found")) {
+        logger.warn("Eski xabar topilmadi, yangi xabar yuboriladi");
+      }
+      // Yangi xabar yuborish
+      const message = await ctx.replyWithPhoto(
+        { source: slidePath },
+        { caption, ...keyboard }
+      );
+      ctx.session.lastSlideMessageId = message.message_id;
+      logger.info(`Yangi xabar yuborildi: ${message.message_id}`);
+    }
+  } else {
+    const message = await ctx.replyWithPhoto(
+      { source: slidePath },
+      { caption, ...keyboard }
+    );
+    ctx.session.lastSlideMessageId = message.message_id;
+    logger.info(`Birinchi xabar yuborildi: ${message.message_id}`);
   }
 }
 
@@ -142,9 +307,21 @@ async function startBot() {
 
     bot.use(session({ getSessionKey: (ctx) => `${ctx.from.id}:${ctx.chat.id}`, ttl: 3600 }));
 
+    // Global error handler with deduplication
+    const errorTimestamps = new Map();
     bot.catch((err, ctx) => {
-      logger.error(`Xato yuz berdi: ${err}`);
-      ctx.reply("Xatolik yuz berdi, keyinroq urinib ko‘ring.");
+      const userId = ctx.from?.id;
+      const now = Date.now();
+      const lastErrorTime = errorTimestamps.get(userId) || 0;
+
+      // Only send error message if 5 minutes have passed since the last error for this user
+      if (now - lastErrorTime > 5 * 60 * 1000) {
+        logger.error(`Xato yuz berdi: ${err.stack}`);
+        ctx.reply("Xatolik yuz berdi, keyinroq urinib ko‘ring.");
+        errorTimestamps.set(userId, now);
+      } else {
+        logger.warn(`Suppressed repeated error for user ${userId}: ${err.message}`);
+      }
     });
 
     // Subscription check
@@ -168,12 +345,12 @@ async function startBot() {
     // Start command
     bot.start(async (ctx) => {
       logger.info(`Yangi foydalanuvchi boshladi: ${ctx.from.id}`);
-      let user = await User.findOne({ telegramId: ctx.from.id });
+      let user = await User.findOne({ telegramId: ctx.from.id.toString() });
 
       const referralId = ctx.startPayload;
       if (!user) {
         ctx.session = ctx.session || {};
-        ctx.session.registrationData = { telegramId: ctx.from.id };
+        ctx.session.registrationData = { telegramId: ctx.from.id.toString() };
 
         if (referralId) {
           ctx.session.registrationData.referredBy = referralId;
@@ -194,7 +371,7 @@ async function startBot() {
     // Text handler
     bot.on("text", async (ctx) => {
       if (!ctx.session) ctx.session = {};
-      let user = await User.findOne({ telegramId: ctx.from.id });
+      let user = await User.findOne({ telegramId: ctx.from.id.toString() });
 
       // Registration steps
       if (ctx.session.step === "firstName") {
@@ -238,7 +415,7 @@ async function startBot() {
           Markup.inlineKeyboard([
             Markup.button.callback("❌ Yo‘q", "start_presentation_no"),
             Markup.button.callback("✅ Ha", "start_presentation_yes"),
-          ]),
+          ])
         );
         ctx.session = { firstUse: true };
       }
@@ -265,7 +442,7 @@ async function startBot() {
         ctx.session.step = "presentation_author_name";
       } else if (ctx.session.step === "presentation_author_name") {
         ctx.session.presentationData = { authorName: ctx.message.text.trim() };
-        await ctx.reply("🏛 Muassasangizni nomini kiriting (Toshkent Davlat Iqtisodiyot Univesiteti):");
+        await ctx.reply("🏛 Muassasangizni nomini kiriting (Toshkent Davlat Iqtisodiyot Universiteti):");
         ctx.session.step = "presentation_institution";
       } else if (ctx.session.step === "presentation_institution") {
         ctx.session.presentationData.institution = ctx.message.text.trim();
@@ -274,33 +451,12 @@ async function startBot() {
       } else if (ctx.session.step === "presentation_topic") {
         ctx.session.presentationData.topic = ctx.message.text.trim();
         if (ctx.session.firstUse) {
-          await requestConfirmation(ctx, 3);
+          // Birinchi foydalanuvchi uchun 3-shablonning slaydshowini ko‘rsatish
+          await showTemplateSlideshow(ctx, 3, true);
+          ctx.session.step = "presentation_template";
         } else if (await checkSubscription(ctx)) {
-          await ctx.reply(
-            "Qaysi shablon asosida taqdimot yaratmoqchisiz?",
-            Markup.inlineKeyboard([
-              [
-                Markup.button.callback("1️⃣", "template_1"),
-                Markup.button.callback("2️⃣", "template_2"),
-                Markup.button.callback("3️⃣", "template_3"),
-              ],
-              [
-                Markup.button.callback("4️⃣", "template_4"),
-                Markup.button.callback("5️⃣", "template_5"),
-                Markup.button.callback("6️⃣", "template_6"),
-              ],
-              [
-                Markup.button.callback("7️⃣", "template_7"),
-                Markup.button.callback("8️⃣", "template_8"),
-              ],
-              [
-                Markup.button.url(
-                  "Shablonlar bilan tanishish",
-                  "https://prezentor-bot-shablon.netlify.app"
-                ),
-              ],
-            ])
-          );
+          // Oddiy foydalanuvchilar uchun 1-shablonning slaydshowini ko‘rsatish
+          await showTemplateSlideshow(ctx, 1, true);
           ctx.session.step = "presentation_template";
         } else {
           await ctx.reply(
@@ -315,12 +471,7 @@ async function startBot() {
           Markup.keyboard([["🔙 Orqaga"]]).resize()
         );
       } else if (ctx.message.text === "📄 Shablonlar") {
-        ctx.reply(
-          "Shablonlarni ko‘rish uchun quyidagi havolaga o‘ting:",
-          Markup.inlineKeyboard([
-            Markup.button.url("Shablonlar", "https://prezentor-bot-shablon.netlify.app"),
-          ])
-        );
+        await showTemplateSlideshow(ctx, 1, false);
       } else if (ctx.message.text === "📖 Qo‘llanma") {
         ctx.reply(
           "Qo‘llanmani ko‘rish uchun quyidagi havolaga o‘ting:",
@@ -331,10 +482,13 @@ async function startBot() {
       } else if (ctx.message.text === "💰 Balans") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         ctx.reply(
-          `💰 **Balansingiz:** ${user.balance} so‘m\n` +
-            `🔹 Xizmatlardan uzluksiz foydalanish uchun balansingiz yetarli ekanligiga ishonch hosil qiling.\n` +
-            `📌 **Balansni to‘ldirish** uchun pastdagi tugmani bosing! 🚀`,
-          Markup.keyboard([["Balansni to‘ldirish"], ["🔙 Orqaga"]]).resize()
+          `💰 <b>Balansingiz:</b> <code>${user.balance}</code> so‘m\n` +
+            `\n🔹 Xizmatlardan uzluksiz foydalanish uchun balansingiz yetarli ekanligiga ishonch hosil qiling.\n` +
+            `\n📌 <b>Balansni to‘ldirish</b> uchun pastdagi tugmani bosing! 🚀`,
+          {
+            parse_mode: "HTML",
+            ...Markup.keyboard([["Balansni to‘ldirish"], ["🔙 Orqaga"]]).resize(),
+          }
         );
       } else if (ctx.message.text === "📎 Referal link") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
@@ -343,17 +497,77 @@ async function startBot() {
           `📎 Sizning referal linkingiz: \n${referralLink}\n\nDo‘stlaringizni taklif qiling va har bir yangi foydalanuvchi uchun 1000 so‘m bonus oling!`,
           Markup.keyboard([["🔙 Orqaga"]]).resize()
         );
+      } else if (ctx.message.text === "👤 Men haqimda") {
+        if (!user) {
+          await ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
+          return;
+        }
+
+        const presentationCount = user.presentations ? user.presentations.length : 0;
+        const currentTime = formatDate(new Date());
+
+        let response =
+          `┌ℹ️ <b>Siz haqidingizda ma'lumot:\n│\n` +
+          `├👤 User: ${user.firstName} ${user.lastName}\n` +
+          `├📑 ID raqam: <code>${user.telegramId}</code>\n` +
+          `├📞 Telefon: ${user.phone}\n` +
+          `├🎓 Talabamisiz: ${user.isStudent ? "Ha" : "Yo‘q"}\n` +
+          `├💰 Asosiy Hisob: ${user.balance} so'm\n` +
+          `└📤 Pul kiritish: 0 so'm</b>\n\n`;
+
+        response += `┌📊 <b>SIZNING TAQDIMOTLARINGIZ:</b>\n│\n`;
+        if (presentationCount > 0) {
+          user.presentations.forEach((pres, index) => {
+            response += `├<b>${index + 1}️⃣ ${pres.topic.toUpperCase()}</b> \n├ Yaratilgan vaqt: ${formatDate(
+              new Date(pres.createdAt)
+            )}\n`;
+          });
+          response += `└✅ Umumiy taqdimotlar soni: ${presentationCount} ta\n`;
+        } else {
+          response += `└✅ Umumiy taqdimotlar soni: 0 ta\n`;
+        }
+
+        response += `\n⏰ ${currentTime}`;
+
+        await ctx.reply(response, { parse_mode: "HTML" });
+      } else if (ctx.message.text === "📊 Statistika") {
+        if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
+
+        const totalUsers = await User.countDocuments();
+        const totalPresentations = await User.aggregate([
+          { $unwind: "$presentations" },
+          { $group: { _id: null, count: { $sum: 1 } } },
+        ]);
+        const presentationCount = totalPresentations[0]?.count || 0;
+
+        const response =
+          `┌📊 <b>Statistika</b>\n│\n` +
+          `├👥 Foydalanuvchilar soni: <b>${totalUsers} </b> ta\n` +
+          `├📈 Yaratilgan taqdimotlar soni: <b>${presentationCount + 200}</b> ta\n` +
+          `└📑 Ochiq baza: <b>@${env.PRESENTATION_CHANNEL.replace("@", "")}</b>\n` +
+          `\n⏰ ${formatDate(new Date())}`;
+
+        await ctx.reply(response, { parse_mode: "HTML" }, Markup.keyboard([["🔙 Orqaga"]]).resize());
       } else if (ctx.message.text === "🔙 Orqaga") {
         showMainMenu(ctx);
       } else if (ctx.message.text === "Balansni to‘ldirish") {
         ctx.reply(
-          `📌 Balansni to‘ldirish\n\n💰 Xizmat narxlari har xil bo‘lib, har bir shablon uchun alohida belgilanadi.\n\n💳 To‘lov uchun karta:\n5614682108792062\n\n👤 Qabul qiluvchi: Ibrohimov Kamronbek\n\n📤 To‘lovni amalga oshirgandan so‘ng, chekni skrinshot qilib yuboring.`,
-          Markup.keyboard([["Chekni yuborish"], ["🔙 Orqaga"]]).resize()
+          `🟢 <b>Balansni to‘ldirish</b>\n\n` +
+            `💰 <i>Xizmat narxlari har xil bo‘lib, har bir shablon uchun alohida belgilanadi.</i>\n\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
+            `💳 <b>To‘lov uchun karta:</b>\n<code>5614 6821 0879 2062</code>\n` +
+            `👤 <b>Qabul :</b> Ibrohimov Kamronbek\n` +
+            `━━━━━━━━━━━━━━━━━━\n\n` +
+            `📤 <b>To‘lovni amalga oshirgandan so‘ng</b>,\n<b>chekni skrinshot qilib yuboring!</b> 📸`,
+          {
+            parse_mode: "HTML",
+            ...Markup.keyboard([["📤 Chekni yuborish"], ["🔙 Orqaga"]]).resize(),
+          }
         );
-      } else if (ctx.message.text === "Chekni yuborish") {
+      } else if (ctx.message.text === "📤 Chekni yuborish") {
         ctx.session.step = "check";
         ctx.reply("Iltimos, to‘lov chekining skrinshotini yuboring:");
-      } 
+      }
       // Admin menu handlers
       else if (ctx.message.text === "👥 Foydalanuvchilar ro‘yxati" && ctx.from.id == adminId) {
         const users = await User.find();
@@ -372,11 +586,14 @@ async function startBot() {
         const userId = ctx.message.text.trim();
         const user = await User.findOne({ telegramId: userId });
         if (!user) {
-          return ctx.reply("Bunday foydalanuvchi topilmadi.", Markup.keyboard([
-            ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
-            ["📜 Balans tarixi", "📊 Statistika"],
-            ["📢 Hammaga xabar yuborish"],
-          ]).resize());
+          return ctx.reply(
+            "Bunday foydalanuvchi topilmadi.",
+            Markup.keyboard([
+              ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+              ["📜 Balans tarixi", "📊 Statistika"],
+              ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
+            ]).resize()
+          );
         }
         ctx.session.adminAddBalanceUserId = userId;
         await ctx.reply("Qo‘shmoqchi bo‘lgan balans miqdorini so‘mda kiriting (masalan, 5000):");
@@ -392,13 +609,18 @@ async function startBot() {
         await user.save();
         await bot.telegram.sendMessage(
           user.telegramId,
-          `💰 Sizning balansingizga ${amount} so‘m qo‘shildi! Hozirgi balans: ${user.balance} so‘m`
+          `💰 Sizning balansingizga ${amount} so‘m qo‘shildi! Hozirgi balans: ${user.balance} so‘m\nSana: ${formatDate(
+            new Date()
+          )}`
         );
-        await ctx.reply(`✅ ${user.firstName} ${user.lastName} ga ${amount} so‘m qo‘shildi.`, Markup.keyboard([
-          ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
-          ["📜 Balans tarixi", "📊 Statistika"],
-          ["📢 Hammaga xabar yuborish"],
-        ]).resize());
+        await ctx.reply(
+          `✅ ${user.firstName} ${user.lastName} ga ${amount} so‘m qo‘shildi.`,
+          Markup.keyboard([
+            ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+            ["📜 Balans tarixi", "📊 Statistika"],
+            ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
+          ]).resize()
+        );
         ctx.session.step = null;
       } else if (ctx.message.text === "📜 Balans tarixi" && ctx.from.id == adminId) {
         await ctx.reply("Foydalanuvchi ID sini kiriting (tarixini ko‘rish uchun):");
@@ -407,53 +629,123 @@ async function startBot() {
         const userId = ctx.message.text.trim();
         const user = await User.findOne({ telegramId: userId });
         if (!user) {
-          return ctx.reply("Bunday foydalanuvchi topilmadi.", Markup.keyboard([
-            ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
-            ["📜 Balans tarixi", "📊 Statistika"],
-            ["📢 Hammaga xabar yuborish"],
-          ]).resize());
+          return ctx.reply(
+            "Bunday foydalanuvchi topilmadi.",
+            Markup.keyboard([
+              ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+              ["📜 Balans tarixi", "📊 Statistika"],
+              ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
+            ]).resize()
+          );
         }
         if (user.balanceHistory.length === 0) {
           return ctx.reply(`${user.firstName} ${user.lastName} uchun balans tarixi mavjud emas.`);
         }
         let response = `📜 ${user.firstName} ${user.lastName} uchun balans tarixi:\n\n`;
         user.balanceHistory.forEach((entry, index) => {
-          response += `${index + 1}. ${entry.amount} so‘m - ${new Date(entry.date).toLocaleString()}\n`;
+          response += `${index + 1}. ${entry.amount} so‘m - ${formatDate(new Date(entry.date))}\n`;
         });
         await sendLongMessage(ctx, response);
         ctx.session.step = null;
       } else if (ctx.message.text === "📊 Statistika" && ctx.from.id == adminId) {
         const totalUsers = await User.countDocuments();
-        const totalBalance = (await User.aggregate([{ $group: { _id: null, total: { $sum: "$balance" } } }])[0]?.total) || 0;
-        const activeUsers = await User.countDocuments({ registered: true });
-        const response = `📊 Statistika:\n\n` +
-          `👥 Umumiy foydalanuvchilar: ${totalUsers}\n` +
-          `✅ Faol foydalanuvchilar: ${activeUsers}\n` +
-          `💰 Umumiy balans: ${totalBalance} so‘m`;
-        await ctx.reply(response, Markup.keyboard([
-          ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
-          ["📜 Balans tarixi", "📊 Statistika"],
-          ["📢 Hammaga xabar yuborish"],
-        ]).resize());
+        const totalPresentations = await User.aggregate([
+          { $unwind: "$presentations" },
+          { $group: { _id: null, count: { $sum: 1 } } },
+        ]);
+        const presentationCount = totalPresentations[0]?.count || 0;
+        const response =
+          `📊 Statistika:\n\n` +
+          `👥 Umumiy foydalanuvchilar soni: ${totalUsers}\n` +
+          `📈 Botda ishlangan taqdimotlar soni: ${presentationCount}\n` +
+          `⏰ ${formatDate(new Date())}`;
+        await ctx.reply(
+          response,
+          Markup.keyboard([
+            ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+            ["📜 Balans tarixi", "📊 Statistika"],
+            ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
+          ]).resize()
+        );
       } else if (ctx.message.text === "📢 Hammaga xabar yuborish" && ctx.from.id == adminId) {
-        ctx.reply("Hammaga yuboriladigan xabarni kiriting (foydalanuvchi ismi uchun {ism} dan foydalaning):");
+        ctx.reply(
+          "Hammaga yuboriladigan xabarni kiriting (foydalanuvchi ismi uchun {ism} dan foydalaning):"
+        );
         ctx.session.step = "admin_broadcast";
       } else if (ctx.session.step === "admin_broadcast" && ctx.from.id == adminId) {
         const messageTemplate = ctx.message.text;
         const users = await User.find();
+        const excludedUserIds = ["5252699139", "6328235354", "7028512132", "466166503"];
+        let successCount = 0;
+
         for (const user of users) {
+          if (excludedUserIds.includes(user.telegramId)) {
+            logger.info(`Excluded user ${user.telegramId} from broadcast`);
+            continue;
+          }
           const personalizedMessage = messageTemplate.replace("{ism}", user.firstName);
           try {
             await bot.telegram.sendMessage(user.telegramId, personalizedMessage);
+            successCount++;
           } catch (err) {
             logger.error(`Xabar yuborishda xato (${user.telegramId}): ${err}`);
           }
         }
-        ctx.reply("Xabar barcha foydalanuvchilarga muvaffaqiyatli yuborildi!", Markup.keyboard([
-          ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
-          ["📜 Balans tarixi", "📊 Statistika"],
-          ["📢 Hammaga xabar yuborish"],
-        ]).resize());
+        ctx.reply(
+          `Xabar ${successCount} ta foydalanuvchiga muvaffaqiyatli yuborildi!\n` +
+            `Jami foydalanuvchilar: ${users.length}\n` +
+            `Sana: ${formatDate(new Date())}`,
+          Markup.keyboard([
+            ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+            ["📜 Balans tarixi", "📊 Statistika"],
+            ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
+          ]).resize()
+        );
+        ctx.session.step = null;
+      } else if (ctx.message.text === "✉️ Bitta foydalanuvchiga xabar" && ctx.from.id == adminId) {
+        ctx.reply("Xabar yuboriladigan foydalanuvchi ID sini kiriting:");
+        ctx.session.step = "admin_single_message_id";
+      } else if (ctx.session.step === "admin_single_message_id" && ctx.from.id == adminId) {
+        const userId = ctx.message.text.trim();
+        const user = await User.findOne({ telegramId: userId });
+        if (!user) {
+          return ctx.reply(
+            "Bunday foydalanuvchi topilmadi.",
+            Markup.keyboard([
+              ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+              ["📜 Balans tarixi", "📊 Statistika"],
+              ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
+            ]).resize()
+          );
+        }
+        ctx.session.singleMessageUserId = userId;
+        await ctx.reply("Yuboriladigan xabarni kiriting:");
+        ctx.session.step = "admin_single_message_text";
+      } else if (ctx.session.step === "admin_single_message_text" && ctx.from.id == adminId) {
+        const messageText = ctx.message.text;
+        const userId = ctx.session.singleMessageUserId;
+        try {
+          await bot.telegram.sendMessage(userId, messageText);
+          ctx.reply(
+            `Xabar ${userId} ID li foydalanuvchiga muvaffaqiyatli yuborildi!\nSana: ${formatDate(
+              new Date()
+            )}`,
+            Markup.keyboard([
+              ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+              ["📜 Balans tarixi", "📊 Statistika"],
+              ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
+            ]).resize()
+          );
+        } catch (err) {
+          ctx.reply(
+            `Xabar yuborishda xato yuz berdi: ${err.message}`,
+            Markup.keyboard([
+              ["👥 Foydalanuvchilar ro‘yxati", "💰 Balans qo‘shish"],
+              ["📜 Balans tarixi", "📊 Statistika"],
+              ["📢 Hammaga xabar yuborish", "✉️ Bitta foydalanuvchiga xabar"],
+            ]).resize()
+          );
+        }
         ctx.session.step = null;
       }
     });
@@ -464,21 +756,9 @@ async function startBot() {
         const phone = ctx.message.contact.phone_number;
         ctx.session.registrationData.phone = phone;
 
-        let user = await User.findOne({ telegramId: ctx.from.id });
+        let user = await User.findOne({ telegramId: ctx.from.id.toString() });
         if (!user) {
           const { firstName, lastName, phone, telegramId } = ctx.session.registrationData;
-          if (!firstName || !lastName || !phone || !telegramId) {
-            logger.error("Sessiyada majburiy ma’lumotlar yetishmayapti:", {
-              telegramId: ctx.from.id,
-              sessionData: ctx.session.registrationData,
-            });
-            await ctx.reply(
-              "Xatolik yuz berdi. Iltimos, /start buyrug‘i bilan qaytadan boshlang."
-            );
-            ctx.session = {};
-            return;
-          }
-
           user = new User({
             telegramId,
             firstName,
@@ -488,6 +768,7 @@ async function startBot() {
             balance: 10000,
             balanceHistory: [{ amount: 10000, date: new Date() }],
             referredBy: ctx.session.registrationData.referredBy || null,
+            createdAt: new Date(),
           });
           await user.save();
 
@@ -510,7 +791,7 @@ async function startBot() {
       await ctx.reply("👤 Taqdimotchining ism-familiyasini xatolarsiz yozing:");
       ctx.session.step = "presentation_author_name";
       ctx.session.firstUse = true;
-      ctx.session.selectedTemplate = 3;
+      ctx.session.selectedTemplate = 3; // Default 3-shablon
     });
 
     bot.action("start_presentation_no", async (ctx) => {
@@ -532,7 +813,11 @@ async function startBot() {
           `📝 Mavzu: ${topic}\n` +
           `📄 Tur: Taqdimot shablon ${templateId}\n` +
           `💰 Narx: ${price} so‘m\n\n` +
-          `${ctx.session.firstUse ? "🎉 Birinchi foydalanish uchun balansingizda mablag' yetarli!" : "Tasdiqlash bilan balansingizdan pul yechiladi."}`,
+          `${
+            ctx.session.firstUse
+              ? "🎉 Birinchi foydalanish uchun balansingizda mablag' yetarli!"
+              : "Tasdiqlash bilan balansingizdan pul yechiladi."
+          }`,
         Markup.inlineKeyboard([
           Markup.button.callback("❌ Yo‘q", "confirm_template_no"),
           Markup.button.callback("✅ Ha", `confirm_template_${templateId}_yes`),
@@ -541,9 +826,9 @@ async function startBot() {
     }
 
     // Template handlers registration
-    for (let i = 1; i <= 12; i++) {
+    for (let i = 1; i <= 8; i++) {
       bot.action(`template_${i}`, async (ctx) => {
-        const user = await User.findOne({ telegramId: ctx.from.id });
+        const user = await User.findOne({ telegramId: ctx.from.id.toString() });
         if (!user) {
           await ctx.reply(
             "Iltimos, avval ro‘yxatdan o‘ting!",
@@ -556,29 +841,70 @@ async function startBot() {
       });
 
       bot.action(`confirm_template_${i}_yes`, async (ctx) => {
-        await templateHandlers[i].handle(ctx, {
-          User,
-          geminiModel,
-          showLoading,
-          logger,
-          bot,
-          fs,
-          onComplete: async () => {
-            await ctx.reply(
-              "✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!\n\n" +
-                "📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. " +
-                "Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊"
-            );
-            showMainMenu(ctx);
-          },
-        });
-        if (ctx.session.firstUse) {
-          ctx.session.firstUse = false;
+        await ctx.answerCbQuery();
+        try {
+          await templateHandlers[i].handle(ctx, {
+            User,
+            geminiModel,
+            showLoading,
+            logger,
+            bot,
+            fs,
+            onComplete: async (filePath) => {
+              const user = await User.findOne({ telegramId: ctx.from.id.toString() });
+              const presentationData = ctx.session.presentationData;
+
+              try {
+                // Save presentation to user's record
+                const presentation = {
+                  authorName: presentationData.authorName,
+                  topic: presentationData.topic,
+                  filePath: filePath,
+                  templateId: i,
+                  createdAt: new Date(),
+                };
+                user.presentations = user.presentations || [];
+                user.presentations.push(presentation);
+                await user.save();
+                logger.info(`Presentation saved for user ${user.telegramId}: ${presentation.topic}`);
+
+                // Post to admin channel (PPTX)
+                await postPresentationToAdminChannel(ctx, presentationData, filePath, i);
+
+                // Post to public channel (PDF)
+                await postPresentationToChannel(ctx, presentationData, filePath, i);
+              } catch (error) {
+                logger.error(`Error in onComplete for template ${i}: ${error.stack}`);
+                await ctx.reply(
+                  "Prezentatsiyani kanallarga yuborishda xato yuz berdi. Iltimos, admin bilan bog‘laning."
+                );
+                throw error; // Let the global error handler catch it if needed
+              }
+            },
+          });
+          if (ctx.session.firstUse) {
+            ctx.session.firstUse = false;
+          }
+        } catch (error) {
+          logger.error(`Error handling template ${i}: ${error.stack}`);
+          // The global error handler will handle this
         }
+      });
+
+      // Shablonlar uchun action handler
+      bot.action(new RegExp(`slide_${i}_(\\w+)`), async (ctx) => {
+        await ctx.answerCbQuery();
+        const fromSelection = ctx.match[1] === "true";
+        await showTemplateSlideshow(ctx, i, fromSelection);
       });
     }
 
+    bot.action("noop", async (ctx) => {
+      await ctx.answerCbQuery();
+    });
+
     bot.action("confirm_template_no", async (ctx) => {
+      await ctx.answerCbQuery();
       await ctx.reply(
         "❌ Tasdiqlash bekor qilindi. Qaytadan tanlang yoki /start bilan boshlang!",
         Markup.keyboard([["✨ Yaratishni boshlash"], ["🔙 Orqaga"]]).resize()

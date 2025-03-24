@@ -2,8 +2,8 @@ const PptxGenJS = require("pptxgenjs");
 const path = require("path");
 const { Markup } = require("telegraf");
 
-// Template 1-specific price
-const PRICE = 8000;
+// Template 9-specific price
+const PRICE = 10000;
 
 // Template 1-specific background images
 const backgroundImages = [
@@ -21,7 +21,7 @@ const backgroundImages = [
   "shablonlar/1/12.png",
 ];
 
-async function handle(ctx, { User, geminiModel, showLoading, logger, bot, fs, onComplete }) {
+async function handle(ctx, { User, geminiModel, showLoading, logger, fs, onComplete }) {
   const user = await User.findOne({ telegramId: ctx.from.id.toString() });
   if (!user || user.balance < PRICE) {
     await ctx.reply(
@@ -90,7 +90,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
   // 2-sahifa
   const secondSlide = pptx.addSlide();
   secondSlide.background = { path: path.resolve(backgroundImages[1]) };
-  secondSlide.addText(`${plan[0]}`, {
+  secondSlide.addText(`${plan[1]}`, {
     x: 4.5,
     y: 1.6,
     fontSize: 22,
@@ -99,7 +99,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
     color: "000000",
     w: "50%",
   });
-  secondSlide.addText(`${plan[1]}`, {
+  secondSlide.addText(`${plan[2]}`, {
     x: 4.5,
     y: 2.3,
     fontSize: 22,
@@ -138,24 +138,24 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 3-sahifa
   const page3Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining kirish qismi uchun 30 - 40 so'zlardan iborat ma'lumot ber!`
+    `${presentationData.topic} mavzusining kirish qismi uchun 30 - 40 so'zlardan iborat ma'lumotni $$$kirish haqida ma'lumot$$$ shablonida ber!`
   );
   const page3Text = page3Result.response.text();
 
   const kirish1Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining kirish qismi uchun 20 - 25 so'zlardan iborat birinchi ma'lumotni ber!`
+    `${presentationData.topic} mavzusining kirish qismi uchun 20 - 25 so'zlardan iborat ma'lumotni $$$ma'lumot$$$ shablonida ber!`
   );
-  const kirish1Text = kirish1Result.response.text();
+  const kirish1Text = kirish1Result.response.text().split("$$$")[1];
 
   const kirish2Result = await geminiModel.generateContent(
-    `${presentationData.topic} yana mavzusining kirish qismi uchun 20 - 25 so'zlardan iborat ikkinchi ma'lumotni ber!`
+    `${presentationData.topic} mavzusining kirish qismi uchun ${kirish1Text} ning mantiqiy davomi bo'lgan 20 - 25 so'zlardan iborat ma'lumotni $$$ma'lumot$$$ shablonida ber!`
   );
-  const kirish2Text = kirish2Result.response.text();
+  const kirish2Text = kirish2Result.response.text().split("$$$")[1];
 
   const kirish3Result = await geminiModel.generateContent(
-    `${presentationData.topic} yana mavzusining kirish qismi uchun 20 - 25 so'zlardan iborat uchinchi ma'lumotni ber!`
+    `${presentationData.topic} mavzusining kirish qismi uchun ${kirish1Text} va ${kirish2Text} ning mantiqiy davomi bo'lgan 20 - 25 so'zlardan iborat ma'lumotni $$$ma'lumot$$$ shablonida ber!`
   );
-  const kirish3Text = kirish3Result.response.text();
+  const kirish3Text = kirish3Result.response.text().split("$$$")[1];
 
   const thirdSlide = pptx.addSlide();
   thirdSlide.background = { path: path.resolve(backgroundImages[2]) };
@@ -430,50 +430,55 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
   });
 
   // Fayl nomini xavfsiz qilish va yaratish
-  const safeFileName = `${presentationData.authorName}_${presentationData.topic}`
-    .replace(/[^a-zA-Z0-9]/g, "_") // Maxsus belgilarni "_" bilan almashtirish
-    .substring(0, 50); // Uzunlikni cheklash
-  const filePath = path.resolve(`${safeFileName}.pptx`);
-  await pptx.writeFile({ fileName: filePath });
-
-  // Loading xabarini o‘chirish
-  await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessageId);
-
-  // Faylni foydalanuvchiga jo‘natish (PPTX formatda)
-  await ctx.telegram.sendDocument(ctx.chat.id, { source: filePath });
-  await ctx.reply(
-    `✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!\n\n` +
-    `📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. ` +
-    `Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊
-    
-    Taqdimotning pdf variantini bazadan yuklab olishingiz mumkin: @Prezentor_resource`,
-    Markup.keyboard([["🔙 Orqaga"]]).resize()
-  );
-
-  // onComplete callback ni chaqirish (kanalga yuborish uchun)
-  if (onComplete) {
-    logger.info(`Calling onComplete for file: ${filePath}`);
-    try {
-      await onComplete(filePath);
-      logger.info(`onComplete completed successfully for file: ${filePath}`);
-      // Faylni o‘chirishni bu yerga ko‘chirish
-      fs.unlinkSync(filePath);
-    } catch (error) {
-      logger.error(`onComplete error: ${error.message}`);
-      logger.error(`Error stack: ${error.stack}`);
-      await ctx.reply("Kanalga yuborishda xato yuz berdi. Admin bilan bog'laning.");
-      // Xato bo‘lsa ham faylni o‘chirish
+    const safeFileName = `${presentationData.authorName}_${presentationData.topic}`
+      .replace(/[^a-zA-Z0-9]/g, "_") // Maxsus belgilarni "_" bilan almashtirish
+      .substring(0, 50); // Uzunlikni cheklash
+    const filePath = path.resolve(`${safeFileName}.pptx`);
+    await pptx.writeFile({ fileName: filePath });
+  
+    // Loading xabarini o‘chirish
+    await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessageId);
+  
+    // Faylni foydalanuvchiga jo‘natish (PPTX formatda)
+    await ctx.telegram.sendDocument(ctx.chat.id, { source: filePath });
+    await ctx.reply(
+      `✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!\n\n` +
+      `📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. ` +
+      `Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊`,
+      Markup.keyboard([["🔙 Orqaga"]]).resize()
+    );
+  
+    // onComplete callback ni chaqirish (kanalga yuborish uchun)
+    if (onComplete) {
+      logger.info(`Calling onComplete for file: ${filePath}`);
+      try {
+        await onComplete(filePath);
+        logger.info(`onComplete completed successfully for file: ${filePath}`);
+        // Faylni o‘chirishni bu yerga ko‘chirish
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          logger.info(`File deleted after onComplete: ${filePath}`);
+        }
+      } catch (error) {
+        logger.error(`onComplete error: ${error.message}`);
+        logger.error(`Error stack: ${error.stack}`);
+        await ctx.reply("Kanalga yuborishda xato yuz berdi. Admin bilan bog'laning.");
+        // Xato bo‘lsa ham faylni o‘chirish
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          logger.info(`File deleted after onComplete error: ${filePath}`);
+        }
+        throw error;
+      }
+    } else {
+      logger.warn(`onComplete callback not provided`);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
+        logger.info(`File deleted (no onComplete): ${filePath}`);
       }
-      throw error;
     }
-  } else {
-    logger.warn(`onComplete callback not provided`);
-    fs.unlinkSync(filePath);
+  
+    ctx.session = {};
   }
-
-  ctx.session = {};
-}
-
-module.exports = { handle, price: PRICE };
+  
+  module.exports = { handle, price: PRICE };

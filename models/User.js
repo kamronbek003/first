@@ -7,9 +7,21 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, required: true },
   registered: { type: Boolean, default: false },
   balance: { type: Number, default: 0 },
-  balanceHistory: [{ amount: Number, date: Date }],
+  balanceHistory: [{
+    amount: { type: Number, required: true },
+    date: { type: Date, default: Date.now },
+    isBonus: { type: Boolean, default: false }
+  }],
   referredBy: { type: String, default: null },
+  presentations: [{
+    authorName: String,
+    topic: String,
+    filePath: String,
+    templateId: Number,
+    createdAt: { type: Date, default: Date.now }
+  }],
   isStudent: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model("User", userSchema);

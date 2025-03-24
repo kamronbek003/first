@@ -23,15 +23,13 @@ const backgroundImages = [
   "shablonlar/8/14.png",
 ];
 
+// String.prototype.toTitleCase funksiyasi
 String.prototype.toTitleCase = function () {
   return this.replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-async function handle(
-  ctx,
-  { User, geminiModel, showLoading, logger, bot, fs }
-) {
-  const user = await User.findOne({ telegramId: ctx.from.id });
+async function handle(ctx, { User, geminiModel, showLoading, logger, bot, fs, onComplete }) {
+  const user = await User.findOne({ telegramId: ctx.from.id.toString() });
   if (!user || user.balance < PRICE) {
     await ctx.reply(
       `Balansingiz yetarli emas! Ushbu shablon narxi: ${PRICE} so‘m`,
@@ -59,7 +57,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
   const outlineResult = await geminiModel.generateContent(outlinePrompt);
   const outlineText = outlineResult.response.text();
   const plan = outlineText.split("$");
-  console.log(plan);
+  logger.info(`Generated plan for ${presentationData.topic}: ${plan}`);
 
   // .pptx fayl yaratish
   const pptx = new PptxGenJS();
@@ -210,7 +208,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 4-sahifa
   const page4Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining ${plan[1]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf  ma'lumot ber!`
+    `${presentationData.topic} mavzusining ${plan[1]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf ma'lumot ber!`
   );
   const page4Text = page4Result.response.text();
 
@@ -238,7 +236,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 5-sahifa
   const page5Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining ${plan[2]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf  ma'lumot ber!`
+    `${presentationData.topic} mavzusining ${plan[2]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf ma'lumot ber!`
   );
   const page5Text = page5Result.response.text();
 
@@ -280,7 +278,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
     bold: true,
     fontFace: "Times New Roman",
     color: "#FFFFFF",
-    w: "70%"
+    w: "70%",
   });
 
   sixSlide.addText(page6Text[0], {
@@ -318,7 +316,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 7-sahifa
   const page7Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining ${plan[4]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf  ma'lumot ber!`
+    `${presentationData.topic} mavzusining ${plan[4]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf ma'lumot ber!`
   );
   const page7Text = page7Result.response.text();
 
@@ -346,13 +344,13 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 8-sahifa
   const page8Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining ${plan[5]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf  ma'lumot ber!`
+    `${presentationData.topic} mavzusining ${plan[5]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf ma'lumot ber!`
   );
   const page8Text = page8Result.response.text();
 
   const eightSlide = pptx.addSlide();
   eightSlide.background = { path: path.resolve(backgroundImages[7]) };
-  eightSlide.addText(plan[2].toUpperCase(), {
+  eightSlide.addText(plan[5].toUpperCase(), {  // plan[2] o‘rniga plan[5] ishlatildi
     x: 1.1,
     y: 0.65,
     align: "center",
@@ -375,7 +373,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 9-sahifa
   const page9Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining ${plan[6]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf  ma'lumot ber!`
+    `${presentationData.topic} mavzusining ${plan[6]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf ma'lumot ber!`
   );
   const page9Text = page9Result.response.text();
 
@@ -404,7 +402,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 10-sahifa
   const page10Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining ${plan[7]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf  ma'lumot ber!`
+    `${presentationData.topic} mavzusining ${plan[7]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf ma'lumot ber!`
   );
   const page10Text = page10Result.response.text();
 
@@ -433,13 +431,13 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 11-sahifa
   const page11Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining ${plan[7]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf  ma'lumot ber!`
+    `${presentationData.topic} mavzusining ${plan[8]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf ma'lumot ber!`  // plan[7] o‘rniga plan[8] ishlatildi
   );
   const page11Text = page11Result.response.text();
 
   const elevenSlide = pptx.addSlide();
   elevenSlide.background = { path: path.resolve(backgroundImages[10]) };
-  elevenSlide.addText(plan[7].toUpperCase(), {
+  elevenSlide.addText(plan[8].toUpperCase(), {  // plan[7] o‘rniga plan[8] ishlatildi
     x: 1.1,
     y: 0.65,
     align: "center",
@@ -462,13 +460,13 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 12-sahifa
   const page12Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusining ${plan[8]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf  ma'lumot ber!`
+    `${presentationData.topic} mavzusining ${plan[9]} rejasi asosida 80 - 90 so'zlardan iborat bir paragraf ma'lumot ber!`  // plan[8] o‘rniga plan[9] ishlatildi
   );
   const page12Text = page12Result.response.text();
 
   const twelveSlide = pptx.addSlide();
   twelveSlide.background = { path: path.resolve(backgroundImages[11]) };
-  twelveSlide.addText(plan[8].toUpperCase(), {
+  twelveSlide.addText(plan[9].toUpperCase(), {  // plan[8] o‘rniga plan[9] ishlatildi
     x: 0.5,
     y: 0.4,
     align: "center",
@@ -490,7 +488,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
 
   // 13-sahifa
   const page13Result = await geminiModel.generateContent(
-    `${presentationData.topic} mavzusida 80 - 90 so'zlardan iborat bir paragraf  mavzu bo'yicha xulosa yozib ber!`
+    `${presentationData.topic} mavzusida 80 - 90 so'zlardan iborat bir paragraf mavzu bo'yicha xulosa yozib ber!`
   );
   const page13Text = page13Result.response.text();
 
@@ -529,25 +527,54 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
     bold: true,
   });
 
-  const filePath = `${presentationData.authorName}(${presentationData.topic}).pptx`;
+  // Fayl nomini xavfsiz qilish va yaratish
+  const safeFileName = `${presentationData.authorName}_${presentationData.topic}`
+    .replace(/[^a-zA-Z0-9]/g, "_") // Maxsus belgilarni "_" bilan almashtirish
+    .substring(0, 50); // Uzunlikni cheklash
+  const filePath = path.resolve(`${safeFileName}.pptx`);
   await pptx.writeFile({ fileName: filePath });
 
   // Loading xabarini o‘chirish
   await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessageId);
 
-  // Faylni foydalanuvchiga jo‘natish
+  // Faylni foydalanuvchiga jo‘natish (PPTX formatda)
   await ctx.telegram.sendDocument(ctx.chat.id, { source: filePath });
-
-  // "Tayyor!" xabarini fayldan keyin yuborish
   await ctx.reply(
-    `✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!
-
-📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊`,
+    `✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!\n\n` +
+    `📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. ` +
+    `Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊`,
     Markup.keyboard([["🔙 Orqaga"]]).resize()
   );
 
-  // Faylni o‘chirish
-  fs.unlinkSync(filePath);
+  // onComplete callback ni chaqirish (kanalga yuborish uchun)
+  if (onComplete) {
+    logger.info(`Calling onComplete for file: ${filePath}`);
+    try {
+      await onComplete(filePath);
+      logger.info(`onComplete completed successfully for file: ${filePath}`);
+      // Faylni o‘chirishni bu yerga ko‘chirish
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        logger.info(`File deleted after onComplete: ${filePath}`);
+      }
+    } catch (error) {
+      logger.error(`onComplete error: ${error.message}`);
+      logger.error(`Error stack: ${error.stack}`);
+      await ctx.reply("Kanalga yuborishda xato yuz berdi. Admin bilan bog'laning.");
+      // Xato bo‘lsa ham faylni o‘chirish
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        logger.info(`File deleted after onComplete error: ${filePath}`);
+      }
+      throw error;
+    }
+  } else {
+    logger.warn(`onComplete callback not provided`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      logger.info(`File deleted (no onComplete): ${filePath}`);
+    }
+  }
 
   ctx.session = {};
 }

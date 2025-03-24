@@ -21,8 +21,8 @@ const backgroundImages = [
   "shablonlar/2/12.png",
 ];
 
-async function handle(ctx, { User, geminiModel, showLoading, logger, bot, fs }) {
-  const user = await User.findOne({ telegramId: ctx.from.id });
+async function handle(ctx, { User, geminiModel, showLoading, logger, bot, fs, onComplete }) {
+  const user = await User.findOne({ telegramId: ctx.from.id.toString() });
   if (!user || user.balance < PRICE) {
     await ctx.reply(
       `Balansingiz yetarli emas! Ushbu shablon narxi: ${PRICE} so‘m`,
@@ -50,6 +50,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
   const outlineResult = await geminiModel.generateContent(outlinePrompt);
   const outlineText = outlineResult.response.text();
   const plan = outlineText.split("$");
+  logger.info(`Generated plan for ${presentationData.topic}: ${plan}`);
 
   // .pptx fayl yaratish
   const pptx = new PptxGenJS();
@@ -428,26 +429,54 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
     bold: true,
   });
 
-  // Faylni saqlash
-  const filePath = `${presentationData.authorName}(${presentationData.topic}).pptx`;
+  // Fayl nomini xavfsiz qilish va yaratish
+  const safeFileName = `${presentationData.authorName}_${presentationData.topic}`
+    .replace(/[^a-zA-Z0-9]/g, "_") // Maxsus belgilarni "_" bilan almashtirish
+    .substring(0, 50); // Uzunlikni cheklash
+  const filePath = path.resolve(`${safeFileName}.pptx`);
   await pptx.writeFile({ fileName: filePath });
 
   // Loading xabarini o‘chirish
   await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessageId);
 
-  // Faylni foydalanuvchiga jo‘natish
+  // Faylni foydalanuvchiga jo‘natish (PPTX formatda)
   await ctx.telegram.sendDocument(ctx.chat.id, { source: filePath });
-
-  // "Tayyor!" xabarini fayldan keyin yuborish
   await ctx.reply(
-    `✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!
-
-📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊`,
+    `✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!\n\n` +
+    `📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. ` +
+    `Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊`,
     Markup.keyboard([["🔙 Orqaga"]]).resize()
   );
 
-  // Faylni o‘chirish
-  fs.unlinkSync(filePath);
+  // onComplete callback ni chaqirish (kanalga yuborish uchun)
+  if (onComplete) {
+    logger.info(`Calling onComplete for file: ${filePath}`);
+    try {
+      await onComplete(filePath);
+      logger.info(`onComplete completed successfully for file: ${filePath}`);
+      // Faylni o‘chirishni bu yerga ko‘chirish
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        logger.info(`File deleted after onComplete: ${filePath}`);
+      }
+    } catch (error) {
+      logger.error(`onComplete error: ${error.message}`);
+      logger.error(`Error stack: ${error.stack}`);
+      await ctx.reply("Kanalga yuborishda xato yuz berdi. Admin bilan bog'laning.");
+      // Xato bo‘lsa ham faylni o‘chirish
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        logger.info(`File deleted after onComplete error: ${filePath}`);
+      }
+      throw error;
+    }
+  } else {
+    logger.warn(`onComplete callback not provided`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      logger.info(`File deleted (no onComplete): ${filePath}`);
+    }
+  }
 
   ctx.session = {};
 }
