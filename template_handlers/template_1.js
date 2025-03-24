@@ -444,9 +444,7 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
   await ctx.reply(
     `✅ Prezentatsiya tayyor! Yuklab olishingiz mumkin!\n\n` +
     `📌 Eslatma: Taqdimot telefonda ochilganda yozuvlar ustma-ust tushib qolishi mumkin. ` +
-    `Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊
-    
-    Taqdimotning pdf variantini bazadan yuklab olishingiz mumkin: @Prezentor_resource`,
+    `Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊`,
     Markup.keyboard([["🔙 Orqaga"]]).resize()
   );
 
