@@ -7,7 +7,6 @@ const validator = require("validator");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const User = require("./models/User");
 const fs = require("fs");
-const { exec } = require("child_process");
 const path = require("path");
 
 // Template handlers
@@ -130,68 +129,6 @@ async function handleReferral(referredBy, newUserId) {
   }
 }
 
-// Convert PPTX to PDF
-async function convertToPDF(pptxPath) {
-  return new Promise((resolve, reject) => {
-    const pdfPath = path.resolve(pptxPath.replace(".pptx", ".pdf"));
-    const isWindows = process.platform === "win32";
-    const libreOfficePath = isWindows
-      ? `"C:\\Program Files\\LibreOffice\\program\\soffice.exe"`
-      : "soffice";
-    const command = `${libreOfficePath} --headless --convert-to pdf "${pptxPath}" --outdir "${path.dirname(pdfPath)}"`;
-
-    logger.info(`Starting PPTX to PDF conversion: ${pptxPath} -> ${pdfPath}`);
-    logger.info(`Executing command: ${command}`);
-
-    exec(command, { timeout: 10000 }, (error, stdout, stderr) => {
-      if (error) {
-        logger.error(`PDF conversion failed: ${error.message}`);
-        return reject(new Error(`PDFga aylantirishda xato: ${error.message}`));
-      }
-      if (!fs.existsSync(pdfPath)) {
-        logger.error(`PDF fayl yaratilmadi: ${pdfPath}`);
-        logger.info(`stdout: ${stdout}`);
-        logger.info(`stderr: ${stderr}`);
-        return reject(new Error("PDF fayl yaratilmadi"));
-      }
-      logger.info(`PDF file verified: ${pdfPath}`);
-      resolve(pdfPath);
-    });
-  });
-}
-
-// Post presentation to public channel (PDF)
-async function postPresentationToChannel(ctx, presentationData, filePath, templateId) {
-  let pdfPath;
-  try {
-    if (!fs.existsSync(filePath)) {
-      logger.error(`PPTX fayl topilmadi: ${filePath}`);
-      throw new Error("PPTX fayl topilmadi");
-    }
-    pdfPath = await convertToPDF(filePath);
-    const message = await bot.telegram.sendDocument(
-      env.PRESENTATION_CHANNEL,
-      { source: pdfPath },
-      {
-        caption: `👤 Taqdimotchi: ${presentationData.authorName}\n` +
-                 `📝 Mavzu: ${presentationData.topic}\n` +
-                 `📅 Yaratilgan sana: ${formatDate(new Date())}\n` +
-                 `📄 Shablon: №${templateId}`
-      }
-    );
-    logger.info(`Presentation posted to public channel: ${message.message_id}`);
-    return message.message_id;
-  } catch (error) {
-    logger.error(`Failed to post to public channel: ${error.message}`);
-    throw error;
-  } finally {
-    if (pdfPath && fs.existsSync(pdfPath)) {
-      fs.unlinkSync(pdfPath);
-      logger.info(`PDF fayl o‘chirildi: ${pdfPath}`);
-    }
-  }
-}
-
 // Post presentation to admin channel (PPTX)
 async function postPresentationToAdminChannel(ctx, presentationData, filePath, templateId) {
   try {
@@ -285,11 +222,9 @@ async function showTemplateSlideshow(ctx, templateId, fromSelection = false) {
       logger.info(`Xabar muvaffaqiyatli tahrir qilindi: ${ctx.session.lastSlideMessageId}`);
     } catch (err) {
       logger.warn(`Xabarni tahrir qilishda xato: ${err.message}`);
-      // Xatolik sababini aniqlash uchun qo‘shimcha log
       if (err.code === 400 && err.description.includes("message to edit not found")) {
         logger.warn("Eski xabar topilmadi, yangi xabar yuboriladi");
       }
-      // Yangi xabar yuborish
       const message = await ctx.replyWithPhoto(
         { source: slidePath },
         { caption, ...keyboard }
@@ -322,7 +257,6 @@ async function startBot() {
       const now = Date.now();
       const lastErrorTime = errorTimestamps.get(userId) || 0;
 
-      // Only send error message if 5 minutes have passed since the last error for this user
       if (now - lastErrorTime > 5 * 60 * 1000) {
         logger.error(`Xato yuz berdi: ${err.stack}`);
         ctx.reply("Xatolik yuz berdi, keyinroq urinib ko‘ring.");
@@ -459,11 +393,9 @@ async function startBot() {
       } else if (ctx.session.step === "presentation_topic") {
         ctx.session.presentationData.topic = ctx.message.text.trim();
         if (ctx.session.firstUse) {
-          // Birinchi foydalanuvchi uchun 3-shablonning slaydshowini ko‘rsatish
           await showTemplateSlideshow(ctx, 3, true);
           ctx.session.step = "presentation_template";
         } else if (await checkSubscription(ctx)) {
-          // Oddiy foydalanuvchilar uchun 1-shablonning slaydshowini ko‘rsatish
           await showTemplateSlideshow(ctx, 1, true);
           ctx.session.step = "presentation_template";
         } else {
@@ -878,15 +810,12 @@ async function startBot() {
 
                 // Post to admin channel (PPTX)
                 await postPresentationToAdminChannel(ctx, presentationData, filePath, i);
-
-                // Post to public channel (PDF)
-                await postPresentationToChannel(ctx, presentationData, filePath, i);
               } catch (error) {
                 logger.error(`Error in onComplete for template ${i}: ${error.stack}`);
                 await ctx.reply(
-                  "Prezentatsiyani kanallarga yuborishda xato yuz berdi. Iltimos, admin bilan bog‘laning."
+                  "Prezentatsiyani admin kanaliga yuborishda xato yuz berdi. Iltimos, admin bilan bog‘laning."
                 );
-                throw error; // Let the global error handler catch it if needed
+                throw error;
               }
             },
           });
@@ -895,7 +824,6 @@ async function startBot() {
           }
         } catch (error) {
           logger.error(`Error handling template ${i}: ${error.stack}`);
-          // The global error handler will handle this
         }
       });
 
