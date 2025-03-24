@@ -134,9 +134,15 @@ async function handleReferral(referredBy, newUserId) {
 async function convertToPDF(pptxPath) {
   return new Promise((resolve, reject) => {
     const pdfPath = path.resolve(pptxPath.replace(".pptx", ".pdf"));
-    const command = `"C:\\Program Files\\LibreOffice\\program\\soffice.exe" --headless --convert-to pdf "${pptxPath}" --outdir "${path.dirname(pdfPath)}"`;
+    const isWindows = process.platform === "win32";
+    const libreOfficePath = isWindows
+      ? `"C:\\Program Files\\LibreOffice\\program\\soffice.exe"`
+      : "soffice"; // Ubuntu uchun
+    const command = `${libreOfficePath} --headless --convert-to pdf "${pptxPath}" --outdir "${path.dirname(pdfPath)}"`;
 
     logger.info(`Starting PPTX to PDF conversion: ${pptxPath} -> ${pdfPath}`);
+    logger.info(`Executing command: ${command}`);
+
     exec(command, { timeout: 10000 }, (error, stdout, stderr) => {
       if (error) {
         logger.error(`PDF conversion failed: ${error.message}`);
