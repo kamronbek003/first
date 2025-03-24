@@ -137,7 +137,7 @@ async function convertToPDF(pptxPath) {
     const isWindows = process.platform === "win32";
     const libreOfficePath = isWindows
       ? `"C:\\Program Files\\LibreOffice\\program\\soffice.exe"`
-      : "soffice"; // Ubuntu uchun
+      : "soffice";
     const command = `${libreOfficePath} --headless --convert-to pdf "${pptxPath}" --outdir "${path.dirname(pdfPath)}"`;
 
     logger.info(`Starting PPTX to PDF conversion: ${pptxPath} -> ${pdfPath}`);
@@ -150,6 +150,8 @@ async function convertToPDF(pptxPath) {
       }
       if (!fs.existsSync(pdfPath)) {
         logger.error(`PDF fayl yaratilmadi: ${pdfPath}`);
+        logger.info(`stdout: ${stdout}`);
+        logger.info(`stderr: ${stderr}`);
         return reject(new Error("PDF fayl yaratilmadi"));
       }
       logger.info(`PDF file verified: ${pdfPath}`);
