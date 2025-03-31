@@ -8,6 +8,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const User = require("./models/User");
 const fs = require("fs");
 const path = require("path");
+const fsPromises = require("fs").promises; // Asinxron fayl operatsiyalari uchun
 
 // Template handlers
 const templateHandlers = {};
@@ -51,7 +52,7 @@ const logger = winston.createLogger({
 // Shablonlar uchun rasmlar (har bir shablon uchun faqat bitta rasm)
 const templateSlides = {};
 for (let i = 1; i <= 8; i++) {
-  templateSlides[i] = `shablonlar_1/${i}/1.png`; // Har bir shablon uchun faqat bitta rasm
+  templateSlides[i] = `shablonlar_1/${i}/1.jpg`; // Har bir shablon uchun faqat bitta rasm
 }
 
 // Date formatting helper
@@ -184,11 +185,13 @@ function showMainMenu(ctx) {
 // Shablon rasmini ko‘rsatish funksiyasi
 async function showTemplateSlideshow(ctx, templateId, fromSelection = false) {
   const slidePath = path.resolve(templateSlides[templateId]);
-  logger.info(`Qidirilayotgan fayl yo‘li: ${slidePath}`);
 
-  if (!fs.existsSync(slidePath)) {
+  // Fayl mavjudligini tekshirish
+  try {
+    await fsPromises.access(slidePath, fs.constants.F_OK);
+  } catch (err) {
     logger.error(`Fayl topilmadi: ${slidePath}`);
-    return ctx.reply(`Shablon №${templateId} uchun rasm topilmadi. Admin bilan bog‘laning.`);
+    return ctx.reply(`Shablon №${templateId} uchun rasm topilmadi. Fayl yo‘lini tekshiring yoki admin bilan bog‘laning.`);
   }
 
   const caption = `Shablon №${templateId}`;
@@ -206,7 +209,22 @@ async function showTemplateSlideshow(ctx, templateId, fromSelection = false) {
     [Markup.button.url("Shablonlar", "https://prezentor-bot-shablon.netlify.app")],
   ]);
 
-  if (ctx.session.lastSlideMessageId) {
+  // Agar bu yangi so‘rov bo‘lsa (masalan, menyudan "Shablonlar" bosilgan bo‘lsa)
+  if (!ctx.callbackQuery) {
+    try {
+      const message = await ctx.replyWithPhoto(
+        { source: slidePath },
+        { caption, ...keyboard }
+      );
+      ctx.session.lastSlideMessageId = message.message_id;
+      ctx.session.lastTemplateId = templateId;
+    } catch (err) {
+      logger.error(`Yangi xabar yuborishda xato: ${err.message}`);
+      return ctx.reply("Shablonni yuborishda xato yuz berdi. Keyinroq urinib ko‘ring.");
+    }
+  }
+  // Agar "Keyingi" yoki "Oldingi" tugmasi bosilgan bo‘lsa
+  else if (ctx.session.lastSlideMessageId) {
     try {
       await ctx.telegram.editMessageMedia(
         ctx.chat.id,
@@ -219,26 +237,29 @@ async function showTemplateSlideshow(ctx, templateId, fromSelection = false) {
         },
         keyboard
       );
-      logger.info(`Xabar muvaffaqiyatli tahrir qilindi: ${ctx.session.lastSlideMessageId}`);
+      ctx.session.lastTemplateId = templateId;
     } catch (err) {
-      logger.warn(`Xabarni tahrir qilishda xato: ${err.message}`);
-      if (err.code === 400 && err.description.includes("message to edit not found")) {
-        logger.warn("Eski xabar topilmadi, yangi xabar yuboriladi");
+      if (err.code === 400 && err.description.includes("message is not modified")) {
+        // Agar rasm va tugmalar o‘zgarmagan bo‘lsa, hech narsa qilmaymiz
+        return;
+      } else if (err.code === 400 && err.description.includes("message to edit not found")) {
+        logger.warn(`Xabar topilmadi: ${ctx.session.lastSlideMessageId}`);
+        const message = await ctx.replyWithPhoto(
+          { source: slidePath },
+          { caption, ...keyboard }
+        );
+        ctx.session.lastSlideMessageId = message.message_id;
+        ctx.session.lastTemplateId = templateId;
+      } else {
+        logger.error(`Xabarni tahrir qilishda xato: ${err.message}`);
+        const message = await ctx.replyWithPhoto(
+          { source: slidePath },
+          { caption, ...keyboard }
+        );
+        ctx.session.lastSlideMessageId = message.message_id;
+        ctx.session.lastTemplateId = templateId;
       }
-      const message = await ctx.replyWithPhoto(
-        { source: slidePath },
-        { caption, ...keyboard }
-      );
-      ctx.session.lastSlideMessageId = message.message_id;
-      logger.info(`Yangi xabar yuborildi: ${message.message_id}`);
     }
-  } else {
-    const message = await ctx.replyWithPhoto(
-      { source: slidePath },
-      { caption, ...keyboard }
-    );
-    ctx.session.lastSlideMessageId = message.message_id;
-    logger.info(`Birinchi xabar yuborildi: ${message.message_id}`);
   }
 }
 
@@ -248,7 +269,7 @@ async function startBot() {
     await mongoose.connect(env.MONGO_URI);
     logger.info("MongoDB connected");
 
-    bot.use(session({ getSessionKey: (ctx) => `${ctx.from.id}:${ctx.chat.id}`, ttl: 3600 }));
+    bot.use(session({ getSessionKey: (ctx) => `${ctx.from?.id}:${ctx.chat.id}`, ttl: 3600 }));
 
     // Global error handler with deduplication
     const errorTimestamps = new Map();
@@ -277,11 +298,12 @@ async function startBot() {
 
     // Inline channels keyboard
     function getChannelsInlineKeyboard() {
-      return Markup.inlineKeyboard(
-        channels.map((channel) => [
+      return Markup.inlineKeyboard([
+        ...channels.map((channel) => [
           Markup.button.url(channel, `https://t.me/${channel.replace("@", "")}`),
-        ])
-      );
+        ]),
+        [Markup.button.callback("✅ Obuna bo'ldim", "subscribed")],
+      ]);
     }
 
     // Start command
