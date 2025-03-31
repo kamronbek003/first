@@ -3,7 +3,7 @@ const path = require("path");
 const { Markup } = require("telegraf");
 
 // Template 8-specific price
-const PRICE = 10000;
+const PRICE = 6000;
 
 // Template 8-specific background images
 const backgroundImages = [
@@ -545,6 +545,12 @@ Ortiqcha matn va raqam qo‘shma! // Misol:
     `Shu sababli, kompyuterda ochib ko‘rishingiz tavsiya etiladi. Agar kompyuterda ochganda ham muammo bo‘lsa, biz bilan bog‘laning. 😊`,
     Markup.keyboard([["🔙 Orqaga"]]).resize()
   );
+
+  // Balansdan narxni yechish
+  user.balance -= PRICE;
+  user.balanceHistory.push({ amount: -PRICE, date: new Date() });
+  await user.save();
+
 
   // onComplete callback ni chaqirish (kanalga yuborish uchun)
   if (onComplete) {
