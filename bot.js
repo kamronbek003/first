@@ -446,7 +446,9 @@ async function startBot() {
         ctx.reply(
           `💰 <b>Balansingiz:</b> <code>${user.balance}</code> so‘m\n` +
             `\n🔹 Xizmatlardan uzluksiz foydalanish uchun balansingiz yetarli ekanligiga ishonch hosil qiling.\n` +
-            `\n📌 <b>Balansni to‘ldirish</b> uchun pastdagi tugmani bosing! 🚀`,
+            `\n📌 <b>Balansni to‘ldirish</b> uchun pastdagi tugmani bosing! 🚀
+            
+            📌 Minimal balans to'ldirish: 10000 so'm`,
           {
             parse_mode: "HTML",
             ...Markup.keyboard([["Balansni to‘ldirish"], ["🔙 Orqaga"]]).resize(),
