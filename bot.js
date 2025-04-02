@@ -444,16 +444,19 @@ async function startBot() {
       } else if (ctx.message.text === "💰 Balans") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         ctx.reply(
-          `💰 <b>Balansingiz:</b> <code>${user.balance}</code> so‘m\n` +
-            `\n🔹 Xizmatlardan uzluksiz foydalanish uchun balansingiz yetarli ekanligiga ishonch hosil qiling.\n` +
-            `\n📌 <b>Balansni to‘ldirish</b> uchun pastdagi tugmani bosing! 🚀
-            
-            📌 Minimal balans to'ldirish: 10000 so'm`,
+          `💰 <b>Balansingiz:</b> <code>${user.balance}</code> so‘m\n\n` +
+          `🔹 Xizmatlardan uzluksiz foydalanish uchun balansingiz yetarli ekanligiga ishonch hosil qiling.\n\n` +
+          `📌 <b>Balansni to‘ldirish</b> uchun pastdagi tugmani bosing! 🚀\n` +
+          `📌 <i>Minimal to‘lov miqdori:</i> <b>10 000 so‘m</b>`,
           {
             parse_mode: "HTML",
-            ...Markup.keyboard([["Balansni to‘ldirish"], ["🔙 Orqaga"]]).resize(),
+            ...Markup.keyboard([
+              ["💳 Balansni to‘ldirish"],
+              ["🔙 Orqaga"]
+            ]).resize(),
           }
         );
+        
       } else if (ctx.message.text === "📎 Referal link") {
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         const referralLink = `https://t.me/${bot.botInfo.username}?start=${user.telegramId}`;
