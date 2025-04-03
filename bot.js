@@ -517,7 +517,7 @@ async function startBot() {
         await ctx.reply(response, { parse_mode: "HTML" }, Markup.keyboard([["🔙 Orqaga"]]).resize());
       } else if (ctx.message.text === "🔙 Orqaga") {
         showMainMenu(ctx);
-      } else if (ctx.message.text === "Balansni to‘ldirish") {
+      } else if (ctx.message.text === "💳 Balansni to‘ldirish") {
         ctx.reply(
           `🟢 <b>Balansni to‘ldirish</b>\n\n` +
             `💰 <i>Xizmat narxlari har xil bo‘lib, har bir shablon uchun alohida belgilanadi.</i>\n\n` +
