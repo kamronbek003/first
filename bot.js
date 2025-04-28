@@ -396,11 +396,11 @@ async function startBot() {
           "Nimani yaratmoqchisiz?",
           Markup.keyboard([
             ["📊 Taqdimot"],
-            ["📚 Mustaqil ish", "📝 Referat"],
             ["🔙 Orqaga"],
           ]).resize()
         );
       } else if (ctx.message.text === "📊 Taqdimot") {
+        return ctx.reply("Bot bu xizmatni to'xtatgan, o'zingiz izlanib taqdimot qilishga harakat qiling😊")
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         await ctx.reply("👤 Taqdimotchining ism-familiyasini xatolarsiz yozing:");
         ctx.session.step = "presentation_author_name";
