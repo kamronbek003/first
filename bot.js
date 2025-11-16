@@ -37,7 +37,7 @@ const channels = env.CHANNELS.split(",");
 
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
 // Logger setup
 const logger = winston.createLogger({
@@ -68,6 +68,11 @@ function formatDate(date) {
 // Loading animation
 async function showLoading(ctx) {
   const frames = [
+    "⏳ Eng yaxshi taqdimot tayyorlanmoqda...",
+    "🤖 Aqlli algoritmlar ishlayapti...",
+    "🔍 Muhim ma’lumotlar yig‘ilmoqda...",
+    "📑 Eng mos tarkib tanlanmoqda...",
+    "🎨 Dizayn ustida ishlanmoqda...",
     "⏳ Eng yaxshi taqdimot tayyorlanmoqda...",
     "🤖 Aqlli algoritmlar ishlayapti...",
     "🔍 Muhim ma’lumotlar yig‘ilmoqda...",
@@ -400,7 +405,7 @@ async function startBot() {
           ]).resize()
         );
       } else if (ctx.message.text === "📊 Taqdimot") {
-        return ctx.reply("Bot bu xizmatni to'xtatgan, o'zingiz izlanib taqdimot qilishga harakat qiling😊")
+        // return ctx.reply("Bot bu xizmatni to'xtatgan, o'zingiz izlanib taqdimot qilishga harakat qiling😊")
         if (!user) return ctx.reply("Iltimos, avval ro‘yxatdan o‘ting.");
         await ctx.reply("👤 Taqdimotchining ism-familiyasini xatolarsiz yozing:");
         ctx.session.step = "presentation_author_name";
